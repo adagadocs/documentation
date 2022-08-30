@@ -1,0 +1,539 @@
+swagger: "2.0"
+info:
+  description: "Api para fazer checkout"
+  version: "1.0.0"
+  title: "Checkout"
+  contact:
+    email: "contato@mail.cc"
+
+host: "localhost"
+
+tags:
+- name: "Checkout"
+  description: "API de checkout"
+
+schemes:
+- "https"
+- "http"
+paths:
+  /checkout:
+    post:
+      tags:
+      - "Checkout"
+      summary: "Criar uma fatura de checkout"
+      description: "Usado para criar uma fatura que pode ser paga por API ou por nossa interface de fatura (paymentLink)"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "body"
+        name: "body"
+        description: "Request para criação de cobrança"
+        required: true
+        schema:
+          $ref: "#/definitions/Checkout"
+      responses:
+        "200": 
+          description: Resposta
+          schema:
+            $ref: "#/response/CheckoutResponse"
+        "400":
+          description: "Dados de INPUT inválido"
+        "500":
+          description: "Server internal error"
+  /checkout/read/{checkoutId}:
+    get:
+      tags:
+      - "Checkout"
+      summary: "Consultar um checkout"
+      description: "Usado para consultar um checkout"
+      parameters:
+      - name: "checkoutId"
+        in: "path"
+        description: "Consultar dados do checkout"
+        required: true
+        type: "string"
+      responses:
+        "200": 
+          description: Resposta
+          schema:
+            $ref: "#/response/ReadCheckoutResponse"
+        "404":
+          description: "Checkout não encontrado"
+        "500":
+          description: "Server internal error"
+  /checkout/card-payment:
+    post:
+      tags:
+      - "Checkout"
+      summary: "Pagar um checkout com cartão"
+      description: "API para efetuar o pagamento do check-out com cartão"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "body"
+        name: "body"
+        description: "Request para criação de cobrança"
+        required: true
+        schema:
+          $ref: "#/definitions/CardPayment"
+      responses:
+        "200": 
+          description: Resposta
+          schema:
+            $ref: "#/response/CardPaymentResponse"
+            
+        "400":
+          description: "Dados de INPUT inválido"
+        "412":
+          description: "Checkout já pago | Checkout já cancelado | Checkout ainda está sendo processado | Checkout está em contestação | Quantidade de parcelas excede o limite pré-definido"
+        "500":
+          description: "Server internal error"
+  
+  /checkout-change-status:
+    post:
+      tags:
+      - "Notificação Webhook"
+      summary: "Notificar a alteração do status de um checkout"
+      description: "Notificamos a alteração do status de um checkout"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "Secret"
+        in: "header"
+        description: "notificationSecret que foi fornecido na criação do checkout"
+        required: false
+        type: "string"
+      - in: "body"
+        name: "body"
+        description: "Corpo da request que enviamos"
+        required: true
+        schema:
+          $ref: "#/definitions/Webhook"
+          
+      responses:
+        "200": 
+          description: Resposta
+ 
+  /boleto/authorize:
+    post:
+      tags:
+      - Pagamento de contas
+      summary: "Consultar dados do boleto (Necessário antes de pagar)"
+      description: "Retorna dados de um boleto"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "body"
+        name: "body"
+        description: "Corpo da request"
+        required: true
+        schema:
+          $ref: "#/definitions/BoletoAuthorization"
+      responses:
+        "200": 
+          description: Resposta
+          schema:
+            $ref: "#/response/BoletoAuthorizationResponse"
+        "400": 
+          description: Dados inválidos
+        "404": 
+          description: Pagamento nao encontrado
+        "500":
+          description: Erro interno
+  /boleto/pay/{authorizationId}:
+    put:
+      tags:
+      - Pagamento de contas
+      summary: "Pagar o Boleto"
+      description: "Efetua o pagamento"
+      consumes:
+      - "application/json"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "authorizationId"
+        in: "path"
+        required: true
+        type: "string"
+      responses:
+        "200": 
+          description: Resposta
+          schema:
+            $ref: "#/response/BoletoPaymentResponse"
+        "400": 
+          description: Dados inválidos
+        "404": 
+          description: Pagamento nao encontrado
+        "500":
+          description: Erro interno
+
+  
+response:
+  CardPaymentResponse:
+    type: "object"
+    required:
+      - id
+      - checkoutId
+      - status
+    properties:
+      id:
+        type: "string"
+        description: "ID do pagamento"
+      checkoutId:
+        type: "string"
+        description: "ID do checkout"
+      paidAmount:
+        type: "integer"
+        description: "Valor pago em centavos, só será retornado em caso de checkout aprovado"
+      status:
+        type: string
+        description: "Status do pagamento"
+        enum:
+          - pending_payment
+          - processing
+          - paid
+          - refunded
+          - rejected
+          - canceled
+          - in_dispute  
+
+  GetReceiptResponse:
+    type: "object"
+    required:
+      - receipt
+    properties:
+      receipt:
+        type: string
+        description: Recibo no formato de PDF em Base64
+  
+  ReadCheckoutResponse:
+    type: "object"
+    required:
+      - id
+      - amount
+      - minInstallments
+      - maxInstallments
+      - status
+    properties:
+      id:
+        type: "string"
+        description: "ID do checkout"
+      amount:
+        type: "integer"
+        description: "Valor em centavos, exemplo R$10,00 = 1000"
+        format: "int64"
+      minInstallments:
+        type: "integer"
+        description: "Define um limite minimo de parcelas que nossa API permitirá pagamento, o parcelamento só funcionará em caso de pagamento com cartão, pois o pagamento via PIX sempre será a vista"
+        minimum: 1
+      maxInstallments:
+        type: "integer"
+        description: "Define um limite máximo de parcelas que nossa API permitirá pagamento, o parcelamento só funcionará em caso de pagamento com cartão, pois o pagamento via PIX sempre será a vista"
+        minimum: 1
+      qrCode:
+        type: "string"
+        description: "Conteúdo do QRCode"
+      qrCodeJPEGBase64:
+        type: "string"
+        description: "Imagem (JPEG) do QRCode em Base64"
+      status:
+        type: string
+        description: "Status do pagamento"
+        enum:
+          - pending_payment
+          - processing
+          - paid
+          - refunded
+          - rejected
+          - canceled
+          - in_dispute
+
+  CheckoutResponse:
+    type: "object"
+    required:
+      - id
+      - paymentLink
+    properties:
+      id:
+        type: "string"
+        description: "ID do checkout"
+      paymentLink:
+        type: "string"
+        description: "Link da fatura"
+      qrCode:
+        type: "string"
+        description: "Conteúdo do QRCode"
+      qrCodeJPEGBase64:
+        type: "string"
+        description: "Imagem (JPEG) do QRCode em Base64"
+  
+  BoletoAuthorizationResponse:
+    type: "object"
+    properties:
+      id:
+        type: 'string'
+        description: 'ID da autorização do boleto que deve ser usado no pagamento'
+      originalAmount:
+        type: 'integer'
+        description: 'Valor original do boleto em centavos'
+      totalAmount:
+        type: 'integer'
+        description: 'Valor total do boleto em centavos'
+      discount:
+        type: 'integer'
+        description: 'Valor do desconto boleto em centavos'
+      interest:
+        type: 'integer'
+        description: 'Valor do juros boleto em centavos'
+      fine:
+        type: 'integer'
+        description: 'Valor da multa boleto em centavos'
+      dueDate:
+        type: 'string'
+        description: 'Data de vencimento do boleto'
+        example: 2020-01-01 10:00:00
+      recipient:
+        description: Dados do recebedor 
+        type: "object"
+        properties:
+          name:
+            type: string
+            description: Nome do recebedor
+          document:
+            type: string
+            description: CPF ou CNPJ mascarado do recebedor
+      payer:
+        description: Dados do pagador
+        type: "object"
+        properties:
+          name:
+            type: string
+            description: Nome do pagador
+          document:
+            type: string
+            description: CPF ou CNPJ mascarado do pagador
+
+  BoletoPaymentResponse:
+    type: "object"
+    properties:
+      id:
+        type: 'string'
+        description: 'ID da autorização do boleto que deve ser usado no pagamento'
+      receipt:
+        type: 'string'
+        description: 'PDF do recibo em base64'
+
+
+definitions:
+  CardPayment:
+    type: "object"
+    required:
+      - cardHolder
+      - installments
+      - cardToken
+      - payer
+    properties:
+      checkoutId:
+        type: string
+        description: ID o checkout (Se enviar null, será criado um novo checkout)
+      amount:
+        type: "integer"
+        description: "Valor em centavos, exemplo R$10,00 = 1000 (Obrigatório se o checkoutId for null)"
+        format: "int64"
+      notificationUrl:
+        type: "string"
+        description: "É a URL onde notificaremos alteração do status da fatura (Obrigatório se o checkoutId for null)"
+      notificationSecret:
+        type: "string"
+        description: "Enviaremos esse valor no HEADER da notificação para que seja confimardo a nossa autenticidade na notificação (Obrigatório se o checkoutId for null)"
+      cardHolder:
+        type: string
+        description: Nome que está no cartão
+      paymentWith:
+        type: string
+        description: Indica de é pagamento no cartão de débito ou de crédito
+        enum:
+          - credit_card
+          - debit_card
+      installments:
+        type: integer
+        description: Quantidade de parcelas (Não pode ser maior que o maxInstallments passado na criação)
+        minimum: 1
+      cardToken:
+        type: string
+        description: Token do cartão gerado com a SDK
+      payer:
+        $ref: "#/definitions/Payer"
+  
+  BoletoAuthorization:
+    type: object
+    properties:
+      barcode: 
+        type: "string"
+        description: "Código de barra"
+      digitable: 
+        type: "string"
+        description: "Linha digitável do boleto"
+  
+  PaymentVehicleDebit:
+    type: object
+    required:
+      - token
+      - checkoutId
+      - notificationUrl
+      - notificationSecret
+      - debits
+    properties:
+      token: 
+        type: "string"
+        description: "Token gerado na consulta"
+      checkoutId:
+        type: "string"
+        description: "ID do checkount de cobrança (serve apenas como um rastreio)"
+      notificationUrl:
+        type: "string"
+        description: "É a URL onde notificaremos alteração do status da fatura"
+      notificationSecret:
+        type: "string"
+        description: "Enviaremos esse valor no HEADER da notificação para que seja confimardo a nossa autenticidade na notificação"
+      debits:
+        type: array
+        description: Array de ID dos débitos que deseja pagar
+        items:
+          type: integer
+  
+  Webhook:
+    type: "object"
+    required:
+    - "checkoutId"
+    - "status"
+    - "action"
+    properties:
+      checkoutId:
+        type: "string"
+        description: "Id do checkout"
+      refundAmount:
+        type: "integer"
+        description: "Em caso de estorno é retornado o valor da devolução"
+        format: "int64"
+      paidAmount:
+        type: "integer"
+        description: "Valor pago em centavos, só será retornado em caso de checkout aprovado"
+      status:
+        type: "string"
+        description: "Novo status"
+        enum:
+          - pending_payment
+          - processing
+          - paid
+          - refunded
+          - rejected
+          - canceled
+          - in_dispute
+      action:
+        type: string
+        description: Ação
+        enum:
+          - payment_update
+          - checkout_update
+        
+  Checkout:
+    type: "object"
+    required:
+    - "amount"
+    - "maxInstallments"
+    - "notificationUrl"
+    - "notificationSecret"
+    - "payer"
+    - "generateQrCode"
+    properties:
+      amount:
+        type: "integer"
+        description: "Valor em centavos, exemplo R$10,00 = 1000"
+        format: "int64"
+      description:
+        type: "string"
+        description: "Descrição da cobrança"
+      generateQrCode:
+        type: "boolean"
+        description: "Se deve ou não gerar o QRCode"
+      minInstallments:
+        type: "integer"
+        description: "Define um limite minimo de parcelas que nossa API permitirá pagamento, o parcelamento só funcionará em caso de pagamento com cartão, pois o pagamento via PIX sempre será a vista"
+        minimum: 1
+      maxInstallments:
+        type: "integer"
+        description: "Define um limite máximo de parcelas que nossa API permitirá pagamento, o parcelamento só funcionará em caso de pagamento com cartão, pois o pagamento via PIX sempre será a vista"
+        minimum: 1
+      notificationUrl:
+        type: "string"
+        description: "É a URL onde notificaremos alteração do status da fatura"
+      notificationSecret:
+        type: "string"
+        description: "Enviaremos esse valor no HEADER da notificação para que seja confimardo a nossa autenticidade na notificação"
+      payer:
+        $ref: "#/definitions/Payer"
+        
+  Payer:
+    description: No caso do pagamento de uma fatura que já foi gerado, somente o campo <b>email</b> e <b>document</b> são obrigatórios, tornando os demais opcionais. 
+    type: "object"
+    required:
+    - "name"
+    - "email"
+    - "document"
+    - "address"
+    - "phone"
+    properties:
+      name:
+        type: string
+        description: nome de quem está realizando o pagamento
+      email:
+        type: string
+        description: email do pagador
+      phone:
+        type: string
+        description: Telefone do usuário
+      document:
+        type: string
+        description: CPF/CNPJ de quem está realizando o pagamento
+      address:
+        $ref: "#/definitions/Address"
+  Address:
+    type: object
+    required:
+    - streetName
+    - streetNumber
+    - zipcode
+    - neighborhood
+    - city
+    - uf
+    properties:
+      streetName: 
+        type: "string"
+        description: "nome da rua"
+      streetNumber: 
+        type: "string"
+        description: "Numéro"
+      zipcode: 
+        type: "string"
+        description: "CEP"
+      neighborhood: 
+        type: "string"
+        description: "Bairro"
+      city: 
+        type: "string"
+        description: "Nome da cidade"
+      uf: 
+        type: "string"
+        example: SP
+        description: "Sigla do estado"
+        minLength: 2
+        maxLength: 2
