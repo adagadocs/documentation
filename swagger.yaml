@@ -1,6 +1,6 @@
 swagger: "2.0"
 info:
-  description: "Api para fazer checkout"
+  description: "Api backend"
   version: "1.0.0"
   title: "Checkout"
   contact:
@@ -163,6 +163,12 @@ paths:
         in: "path"
         required: true
         type: "string"
+      - name: "body"
+        in: "body"
+        description: "Corpo da request"
+        required: true
+        schema:
+          $ref: "#/definitions/BoletoPay"
       responses:
         "200": 
           description: Resposta
@@ -382,6 +388,23 @@ definitions:
       digitable: 
         type: "string"
         description: "Linha digitável do boleto"
+        
+  BoletoPay:
+    type: object
+    properties:
+      payer: 
+        $ref: "#/definitions/PayerBoleto"
+  
+  PayerBoleto:
+    type: object
+    description: somente é necessário se estes dados não retornarem na autorização do Boleto
+    properties:
+      name: 
+        type: string
+        description: Nome
+      document: 
+        type: string
+        description: CPF ou CNPJ do pagador
   
   PaymentVehicleDebit:
     type: object
