@@ -267,6 +267,7 @@ response:
     required:
       - id
       - paymentLink
+      - paymentMobileLink
     properties:
       id:
         type: "string"
@@ -274,6 +275,9 @@ response:
       paymentLink:
         type: "string"
         description: "Link da fatura"
+      paymentMobileLink:
+        type: "string"
+        description: "Link da fatura para Webview"
       qrCode:
         type: "string"
         description: "Conteúdo do QRCode"
